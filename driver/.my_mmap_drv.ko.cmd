@@ -1,1 +1,0 @@
-cmd_/root/mmap_example/driver/my_mmap_drv.ko := ld -r -m elf_x86_64 -T /usr/src/linux-headers-3.13.0-141-generic/scripts/module-common.lds --build-id  -o /root/mmap_example/driver/my_mmap_drv.ko /root/mmap_example/driver/my_mmap_drv.o /root/mmap_example/driver/my_mmap_drv.mod.o
