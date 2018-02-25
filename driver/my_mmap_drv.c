@@ -39,11 +39,13 @@
 #include <linux/errno.h>
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
+#include <linux/version.h>
 
 #define DEVNAME "my_mmap"
 
 const char *msg = "My mmap options implement, this is file: ";
-#define PRINTFUNC()	pr_info("== %s ==\n", __func__);
+#define PRINTFUNC()	pr_info("-- %s --\n", __func__);
+#define PRINTERR(msg)	pr_err("== %s: %s ==\n", __func__, msg);
 
 struct mmap_info{
 	void *data;
@@ -66,22 +68,29 @@ static void my_vma_close(struct vm_area_struct *vma)
 	PRINTFUNC();
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,11,0)
+static int my_vma_nopage(struct vm_fault *vmf)
+#else
 static int my_vma_nopage(struct vm_area_struct *vma, struct vm_fault *vmf)
+#endif
 {
 	struct mmap_info *info;
 	struct page *page = NULL;
 	int err = 0;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,11,0)
+	struct vm_area_struct *vma = vmf->vma;
+#endif
 
 	do{
-		if(!vma || (unsigned long)vmf->virtual_address > vma->vm_end){
-			pr_err("== %s: invalid address! ==\n", __func__);
+		if(!vma || (unsigned long)vmf->address > vma->vm_end){
+			PRINTERR("invalid address!");
 			err = VM_FAULT_SIGBUS;
 			break;
 		}
 
 		info = (struct mmap_info *)vma->vm_private_data;
 		if(!info->data){
-			pr_err("== %s: No data pool pointer ==\n", __func__);
+			PRINTERR("No data pool pointer!");
 			err = VM_FAULT_SIGBUS;
 			break;
 		}
@@ -112,8 +121,8 @@ static int my_open(struct inode *ip, struct file *filp)
 	
 	memcpy((char *)info->data, msg, strlen(msg));
 	memcpy((char *)info->data + strlen(msg),
-				filp->f_dentry->d_name.name,
-				strlen(filp->f_dentry->d_name.name));
+				filp->f_path.dentry->d_name.name,
+				strlen(filp->f_path.dentry->d_name.name));
 	filp->private_data = info;
 	
 	return 0;
@@ -161,7 +170,7 @@ static int __init my_mmap_example_init(void)
 	
 	ret = misc_register(&my_miscdev);
 	if(ret){
-		pr_err("== %s: misc register failed ==\n", __func__);
+		PRINTERR("misc device register failed!");
 		return ret;
 	}
 

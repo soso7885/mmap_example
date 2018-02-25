@@ -8,7 +8,7 @@
 
 #define PAGESIZE	4096
 
-const char *modify = "User modify!";
+const char *modify = "## User modify! ##";
 
 int main(int argc, char **argv)
 {
