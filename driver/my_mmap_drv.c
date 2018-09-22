@@ -6,10 +6,10 @@
  * syscall: mmap(caddr_t addr, size_t len, int ptro, int flags, int fd, off_t off)
  * file operation: int (*mmap)(struct file *f, struct vm_area_struct *vma)
  *
- * Driver needs to: build page tables for address range, and replace vma->vm_ops 
+ * Driver needs to: build page tables for address range, and replace vma->vm_ops
  * Building page tables:
  *	- all at once: remap_page_range
- *	- one page at a time: nopage method. Finds correct page for address, and 
+ *	- one page at a time: nopage method. Finds correct page for address, and
  *    increments its reference cout. Must be implemented if driver supports
  *    mremap syscall
  *
@@ -18,7 +18,7 @@
  *	- struct file *vm_file					: file associated with VMA
  *	- struct vm_operations_struct *vm_ops	: functions that kernel
  *                   							will invoke to operate in VMA
- *	- void *vm_private_data					: used by driver to store its own 
+ *	- void *vm_private_data					: used by driver to store its own
  * 												information
  *
  * VMA operations:
@@ -27,8 +27,8 @@
  *                   	to the VMA is made, except when the VMA is first created,
  *                   	when mmap is called
  *	- struct page *(*nopage)(struct vm_area_struct *area,
- *					unsigned long address, int write_access): 
- *						invoked by page fault handler when process tries to access 
+ *					unsigned long address, int write_access):
+ *						invoked by page fault handler when process tries to access
  *						valid page in VMA, but not currently in memory
  */
 #include <linux/init.h>
@@ -44,8 +44,6 @@
 #define DEVNAME "my_mmap"
 
 const char *msg = "My mmap options implement, this is file: ";
-#define PRINTFUNC()	pr_info("-- %s --\n", __func__);
-#define PRINTERR(msg)	pr_err("== %s: %s ==\n", __func__, msg);
 
 struct mmap_info{
 	void *data;
@@ -57,7 +55,7 @@ static void my_vma_open(struct vm_area_struct *vma)
 	struct mmap_info *info = (struct mmap_info *)vma->vm_private_data;
 
 	info->ref++;
-	PRINTFUNC();
+	pr_info("== %s ==\n", __func__);
 }
 
 static void my_vma_close(struct vm_area_struct *vma)
@@ -65,7 +63,7 @@ static void my_vma_close(struct vm_area_struct *vma)
 	struct mmap_info *info = (struct mmap_info *)vma->vm_private_data;
 
 	info->ref--;
-	PRINTFUNC();
+	pr_info("== %s ==\n", __func__);
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,11,0)
@@ -76,33 +74,29 @@ static int my_vma_nopage(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
 	struct mmap_info *info;
 	struct page *page = NULL;
-	int err = 0;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,11,0)
 	struct vm_area_struct *vma = vmf->vma;
 #endif
 
-	do{
-		if(!vma || (unsigned long)vmf->address > vma->vm_end){
-			PRINTERR("invalid address!");
-			err = VM_FAULT_SIGBUS;
-			break;
-		}
+	pr_info("== %s ==\n", __func__);
 
-		info = (struct mmap_info *)vma->vm_private_data;
-		if(!info->data){
-			PRINTERR("No data pool pointer!");
-			err = VM_FAULT_SIGBUS;
-			break;
-		}
+	if(!vma || (unsigned long)vmf->address > vma->vm_end){
+		pr_err("== %s: invalid address ==\n", __func__);
+		return VM_FAULT_SIGBUS;
+	}
 
-		PRINTFUNC();
-		/* Get the page */
-		page = virt_to_page(info->data);
-		get_page(page);
-		vmf->page = page;
-	}while(0);	
+	info = (struct mmap_info *)vma->vm_private_data;
+	if(!info->data){
+		pr_err("== %s: No data pool pointer ==\n", __func__);
+		return VM_FAULT_SIGBUS;
+	}
 
-	return err;	
+	/* Get the page */
+	page = virt_to_page(info->data);
+	get_page(page);
+	vmf->page = page;
+
+	return 0;
 }
 
 struct vm_operations_struct my_vm_ops = {
@@ -115,47 +109,50 @@ static int my_open(struct inode *ip, struct file *filp)
 {
 	struct mmap_info *info;
 
-	PRINTFUNC();
-	info = kmalloc(sizeof(struct mmap_info), GFP_KERNEL);
+	pr_info("== %s ==\n", __func__);
+
+	info = kzalloc(sizeof(struct mmap_info), GFP_KERNEL);
 	info->data = (void *)get_zeroed_page(GFP_KERNEL);
-	
 	memcpy((char *)info->data, msg, strlen(msg));
 	memcpy((char *)info->data + strlen(msg),
 				filp->f_path.dentry->d_name.name,
 				strlen(filp->f_path.dentry->d_name.name));
 	filp->private_data = info;
-	
+
 	return 0;
 }
 
 static int my_release(struct inode * ip, struct file *filp)
 {
 	struct mmap_info *info = filp->private_data;
-	
-	PRINTFUNC();
+
+	pr_info("== %s ==\n", __func__);
+
 	free_page((unsigned long)info->data);
 	kfree(info);
-	filp->private_data = NULL;	
-	
+	filp->private_data = NULL;
+
 	return 0;
 }
 
-static int my_mmap(struct file *filp, struct vm_area_struct *vma)   
-{  
+static int my_mmap(struct file *filp, struct vm_area_struct *vma)
+{
+	pr_info("== %s ==\n", __func__);
+
 	vma->vm_ops = &my_vm_ops;
-	vma->vm_flags |= (VM_DONTEXPAND | VM_DONTDUMP); 
+	vma->vm_flags |= (VM_DONTEXPAND | VM_DONTDUMP);
 	/* assigned the pointer of structure */
 	vma->vm_private_data = filp->private_data;
-	my_vma_open(vma);	
+	my_vma_open(vma);
 
-	return  0;  
-}  
+	return  0;
+}
 
 static struct file_operations my_fops = {
 	.owner		= THIS_MODULE,
 	.open		= my_open,
 	.release	= my_release,
-	.mmap		= my_mmap,	
+	.mmap		= my_mmap,
 };
 
 static struct miscdevice my_miscdev = {
@@ -167,26 +164,26 @@ static struct miscdevice my_miscdev = {
 static int __init my_mmap_example_init(void)
 {
 	int ret;
-	
+
+	pr_info("== %s ==\n", __func__);
+
 	ret = misc_register(&my_miscdev);
 	if(ret){
-		PRINTERR("misc device register failed!");
+		pr_err("== %s: msic_register failed! ==\n", __func__);
 		return ret;
 	}
-
-	PRINTFUNC();
 
 	return 0;
 }
 
 static void __exit my_mmap_example_exit(void)
 {
+	pr_info("== %s ==\n", __func__);
 	misc_deregister(&my_miscdev);
-	PRINTFUNC();
 }
 
 module_init(my_mmap_example_init);
 module_exit(my_mmap_example_exit);
 MODULE_LICENSE("Dual BSD/GPL");
-MODULE_AUTHOR("Phil Chang");  
+MODULE_AUTHOR("Phil Chang");
 

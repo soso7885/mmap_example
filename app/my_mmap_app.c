@@ -26,19 +26,19 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	do{	
+	do{
 		addr = mmap(NULL, PAGESIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 		if(addr == MAP_FAILED){
 			printf("mmap: %s\n", strerror(errno));
 			break;
 		}
-		
+
 		printf("The initial data in memory: %s\n", addr);
 		memcpy(addr+20, modify, strlen(modify));
 		printf("The modified data in memory: %s\n", addr);
 	}while(0);
-	
+
 	close(fd);
-	
+
 	return 0;
 }
